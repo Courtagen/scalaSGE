@@ -23,7 +23,7 @@ trait SGE extends Resources {
     SGEOptions +=  "#$-cwd" //use current working dir
     SGEOptions +=  "#$-j y" //join stdout and stderr
     SGEOptions +=  "#$-pe " + PE_TYPE + " " +NUMBER_OF_CPUS  //set number of cpus
-    SGEOptions +=  "#$-mf=" + MEMORY
+    SGEOptions +=  "#$-l -mf=" + MEMORY
     SGEOptions +=  "#$-S /bin/bash" //run through bash shell
     SGEOptions +=  "#$-l h_rt=" + WALL_TIME
     val buff = new ArrayBuffer[String]
