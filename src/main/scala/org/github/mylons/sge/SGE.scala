@@ -14,16 +14,18 @@ import java.io.{File, PrintWriter}
 trait SGE extends Resources {
 
   val header = "!#/bin/bash"
+  val scriptFileName = "DefaultScriptName"
+  var scriptPath = "/tmp/superpipe/"
   val SGEOptions = new ArrayBuffer[String]()
 
   val commands = new ArrayBuffer[String]()
 
   def script( ): ArrayBuffer[String] = {
-    SGEOptions.clear()
+    //SGEOptions.clear()
     SGEOptions +=  "#$-cwd" //use current working dir
     SGEOptions +=  "#$-j y" //join stdout and stderr
     SGEOptions +=  "#$-pe " + PE_TYPE + " " +NUMBER_OF_CPUS  //set number of cpus
-    SGEOptions +=  "#$-l -mf=" + MEMORY
+    SGEOptions +=  "#$-l h_vmem=" + MEMORY
     SGEOptions +=  "#$-S /bin/bash" //run through bash shell
     SGEOptions +=  "#$-l h_rt=" + WALL_TIME
     val buff = new ArrayBuffer[String]
@@ -32,7 +34,7 @@ trait SGE extends Resources {
     for (token <- SGEOptions) buff += token
     buff += "#End SGE Options"
     buff += "#Begin User Options"
-    for (content <- additionalContent) buff += content
+    //for (content <- additionalContent) buff += content
     buff += "#End User Options"
     buff += "#Begin User Computation"
     for (command <- commands) buff += command
@@ -40,30 +42,49 @@ trait SGE extends Resources {
     return buff
   }
 
-  def writeScript( fileName: String ) = {
-    val writer = new PrintWriter(new File(fileName) )
+  def writeScript( theScriptPath: String ) = {
+    scriptPath = theScriptPath + "/" + scriptFileName + ".sh"
+    val writer = new PrintWriter( scriptPath )
     val lines = script()
     for (line <- lines)
-      writer.write(line)
+      writer.write(line+"\n")
     writer.close()
   }
 
 }
 
+case class QSUBStatus( )
+case class QSUBFailure( msg: String ) extends QSUBStatus {
+  override def toString = "[scalaSGE]: " + msg
+}
+case class QSUBSuccess( success: Boolean ) extends QSUBStatus{
+  override def toString = "[scalaSGE]: qsub successful"
+}
+
 trait Job extends SGE {
   //qsub script basically
-  val scriptName = "DefaultScriptName"
   val jobName = "DefaultJobName"
 
-  val dependentJobs = new ArrayBuffer[DependentJob]()
+  val dependentJobs = new ArrayBuffer[Job]()
 
   def appendNameToScript() = SGEOptions += "#$-N " + jobName
   def appendCommandToScript( command: String) = commands += command
 
-  def submit(): String = {
-    "qsub " + scriptName !! //! is a shortcut to execute system process, !! returns the string
+  def submit(): QSUBStatus = {
+    //"qsub " + scriptName !! //! is a shortcut to execute system process, !! returns the string
+    try {
+      "qsub " + scriptPath !!
+    }
+    catch {
+      case failure => {
+        val failString: String = "qsub " + scriptPath
+        return QSUBFailure("Could not submit job: " + failString + " [Fail]: "+failure)
+      }
+    }
+    return QSUBSuccess(true)
   }
-  def addDependency( nameOfJob: String ) = (SGEOptions += "#$-hold_jid "+ nameOfJob)
+
+  def addDependency( job: Job ) = (SGEOptions += "#$-hold_jid "+ job.jobName)
 
 
 }
