@@ -4,6 +4,7 @@ import org.github.mylons.sge.util.Resources
 import collection.mutable.ArrayBuffer
 import scala.sys.process._
 import java.io.{File, PrintWriter}
+import collection.mutable
 
 /**
  * Author: Mike Lyons
@@ -16,22 +17,38 @@ trait SGE extends Resources {
   val header = "!#/bin/bash"
   val scriptFileName = "DefaultScriptName"
   var scriptPath = "/tmp/"
-  val SGEOptions = new ArrayBuffer[String]()
+  val SGEOptions = new mutable.HashMap[String, String]()
 
   val commands = new ArrayBuffer[String]()
 
+  /**
+   * Adds an SGE option to the
+   * Deleterious to existing options in the map
+   * @param qsubOption
+   * @param optionValue
+   */
+  def addOption( qsubOption: String, optionValue: String = "") {
+    SGEOptions += (qsubOption -> optionValue)
+  }
+
+  def optionString = SGEOptions.foldLeft("")( (acc, kv) => acc + "# " + kv._1 +" "+kv._2 + "\n")
+
+  def defaultOptions = {
+    addOption("-cwd", "") //use current working dir
+    addOption("-j","y") //join stdout and stderr
+    if (!SGEOptions.contains("-pe"))
+      addOption("-pe" , new String(PE_TYPE + " " +NUMBER_OF_CPUS ) )//set number of cpus
+    if (!SGEOptions.contains("-l h_vmem"))
+      addOption("-l h_vmem=",  MEMORY)
+    if (!SGEOptions.contains("-l h_rt"))
+      addOption("-l h_rt=",  WALL_TIME)
+  }
   def script( ): ArrayBuffer[String] = {
-    //SGEOptions.clear()
-    SGEOptions +=  "#$-cwd" //use current working dir
-    SGEOptions +=  "#$-j y" //join stdout and stderr
-    SGEOptions +=  "#$-pe " + PE_TYPE + " " +NUMBER_OF_CPUS  //set number of cpus
-    SGEOptions +=  "#$-l mem=" + MEMORY
-    SGEOptions +=  "#$-S /bin/bash" //run through bash shell
-    SGEOptions +=  "#$-l h_rt=" + WALL_TIME
-    val buff = new ArrayBuffer[String]
+    defaultOptions //setup defaults if need be
+    val buff = new ArrayBuffer[String]()
     buff += header
     buff += "#Begin SGE Options"
-    for (token <- SGEOptions) buff += token
+    buff += optionString
     buff += "#End SGE Options"
     buff += "#Begin User Options"
     //for (content <- additionalContent) buff += content
@@ -67,7 +84,7 @@ trait Job extends SGE {
 
   val dependentJobs = new ArrayBuffer[Job]()
 
-  def appendNameToScript() = SGEOptions += "#$-N " + jobName
+  def appendNameToScript() = SGEOptions += ("-N" -> jobName)
   def appendCommandToScript( command: String) = commands += command
 
   def submit(): QSUBStatus = {
@@ -84,7 +101,13 @@ trait Job extends SGE {
     return QSUBSuccess(true)
   }
 
-  def addDependency( job: Job ) = (SGEOptions += "#$-hold_jid "+ job.jobName)
+  def addDependency( job: Job ) = {
+    //(SGEOptions += "#$-hold_jid "+ job.jobName)
+    if (SGEOptions.contains("-hold_jid"))
+      SGEOptions.update("-hold_jid", SGEOptions.get("-hold_jid")+","+job.jobName)
+    else
+      SGEOptions += ("-hold_jid" -> job.jobName )
+  }
 
 
 }
