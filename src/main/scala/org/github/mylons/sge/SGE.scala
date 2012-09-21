@@ -31,22 +31,30 @@ trait SGE extends Resources {
     SGEOptions += (qsubOption -> optionValue)
   }
 
-  def optionString: String = SGEOptions.foldLeft(""){ case (acc, (key, value)) => "%s# %s %s\n".format(acc, key, value) }
+  def optionString: String = {
+    SGEOptions.foldLeft("") { case (acc, (key, value)) => {
+      if (key.contains("="))
+        "%s#$ %s%s\n".format(acc, key, value)
+      else
+        "%s#$ %s %s\n".format(acc, key, value)
+      }
+    }
+  }
 
   def defaultOptions = {
     addOption("-cwd", "") //use current working dir
     addOption("-j","y") //join stdout and stderr
     if (!SGEOptions.contains("-pe"))
-      addOption("-pe" , new String(PE_TYPE + " " +NUMBER_OF_CPUS ) )//set number of cpus
-    if (!SGEOptions.contains("-l h_vmem"))
+      addOption("-pe" , new String( PE_TYPE + " " +NUMBER_OF_CPUS ) )//set number of cpus
+    if (!SGEOptions.contains("-l h_vmem="))
       addOption("-l h_vmem=",  MEMORY)
-    if (!SGEOptions.contains("-l h_rt"))
+    if (!SGEOptions.contains("-l h_rt="))
       addOption("-l h_rt=",  WALL_TIME)
   }
   def script( ): ArrayBuffer[String] = {
     defaultOptions //setup defaults if need be
     val buff = new ArrayBuffer[String]()
-    buff += header
+    //buff += header
     buff += "#Begin SGE Options"
     buff += optionString
     buff += "#End SGE Options"
@@ -105,7 +113,7 @@ trait Job extends SGE {
     if (SGEOptions.contains("-hold_jid"))
       SGEOptions.update("-hold_jid", SGEOptions.getOrElse("-hold_jid", "")+","+job.jobName)
     else
-      SGEOptions += ("-hold_jid" -> job.jobName )
+      SGEOptions += ("-hold_jid" ->  job.jobName )
   }
 
 
