@@ -31,7 +31,7 @@ trait SGE extends Resources {
     SGEOptions += (qsubOption -> optionValue)
   }
 
-  def optionString = SGEOptions.foldLeft("")( (acc, kv) => acc + "# " + kv._1 +" "+kv._2 + "\n")
+  def optionString: String = SGEOptions.foldLeft(""){ case (acc, (key, value)) => "%s# %s %s\n".format(acc, key, value) }
 
   def defaultOptions = {
     addOption("-cwd", "") //use current working dir
@@ -64,7 +64,7 @@ trait SGE extends Resources {
     val writer = new PrintWriter( scriptPath )
     val lines = script()
     for (line <- lines)
-      writer.write(line+"\n")
+      writer.println(line)
     writer.close()
   }
 
@@ -102,9 +102,8 @@ trait Job extends SGE {
   }
 
   def addDependency( job: Job ) = {
-    //(SGEOptions += "#$-hold_jid "+ job.jobName)
     if (SGEOptions.contains("-hold_jid"))
-      SGEOptions.update("-hold_jid", SGEOptions.get("-hold_jid")+","+job.jobName)
+      SGEOptions.update("-hold_jid", SGEOptions.getOrElse("-hold_jid", "")+","+job.jobName)
     else
       SGEOptions += ("-hold_jid" -> job.jobName )
   }
@@ -112,8 +111,4 @@ trait Job extends SGE {
 
 }
 
-trait DependentJob extends Job {
-//create new SGE options and override the script
-  val dependentJobID = ""
-}
 
