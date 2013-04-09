@@ -1,6 +1,6 @@
 package org.github.mylons.test
 
-import org.github.mylons.sge.Job
+/*import org.github.mylons.sge.Job
 
 /**
  * Author: Mike Lyons
@@ -20,4 +20,4 @@ object SGETest extends App {
   println( sge.script().reduceLeft(_ + "\n" + _))
   println("\n\n")
   println( sge.script().reduceLeft(_ + "\n" + _))
-}
+}*/

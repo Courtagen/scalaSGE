@@ -5,6 +5,7 @@ import collection.mutable.ArrayBuffer
 import scala.sys.process._
 import java.io.{File, PrintWriter}
 import collection.mutable
+import scala.util.{Try, Success, Failure}
 
 /**
  * Author: Mike Lyons
@@ -18,6 +19,7 @@ trait SGE extends Resources {
   val scriptFileName = "DefaultScriptName"
   var scriptPath = "/tmp/"
   val SGEOptions = new mutable.HashMap[String, String]()
+  val environmentOptions = new ArrayBuffer[String]()
 
   val commands = new ArrayBuffer[String]()
 
@@ -29,6 +31,10 @@ trait SGE extends Resources {
    */
   def addOption( qsubOption: String, optionValue: String = "") {
     SGEOptions += (qsubOption -> optionValue)
+  }
+
+  def addEnvironmentSetting( shellSetting: String ) {
+    environmentOptions += shellSetting
   }
 
   def optionString: String = {
@@ -43,23 +49,23 @@ trait SGE extends Resources {
 
   def defaultOptions = {
     addOption("-cwd", "") //use current working dir
-    addOption("-j","y") //join stdout and stderr
     if (!SGEOptions.contains("-pe"))
       addOption("-pe" , new String( PE_TYPE + " " +NUMBER_OF_CPUS ) )//set number of cpus
+    if (!SGEOptions.contains("-l s_vmem="))
+      addOption("-l s_vmem=",  S_MEMORY)
     if (!SGEOptions.contains("-l h_vmem="))
-      addOption("-l h_vmem=",  MEMORY)
+      addOption("-l h_vmem=",  H_MEMORY)
     if (!SGEOptions.contains("-l h_rt="))
       addOption("-l h_rt=",  WALL_TIME)
   }
   def script( ): ArrayBuffer[String] = {
-    defaultOptions //setup defaults if need be
     val buff = new ArrayBuffer[String]()
-    //buff += header
+    environmentOptions.foreach( buff += _ )
+    defaultOptions //setup defaults if need be
     buff += "#Begin SGE Options"
     buff += optionString
     buff += "#End SGE Options"
     buff += "#Begin User Options"
-    //for (content <- additionalContent) buff += content
     buff += "#End User Options"
     buff += "#Begin User Computation"
     for (command <- commands) buff += command
@@ -78,12 +84,13 @@ trait SGE extends Resources {
 
 }
 
-case class QSUBStatus( )
+trait QSUBStatus
+
 case class QSUBFailure( msg: String ) extends QSUBStatus {
   override def toString = "[scalaSGE]: " + msg
 }
-case class QSUBSuccess( success: Boolean ) extends QSUBStatus{
-  override def toString = "[scalaSGE]: qsub successful"
+case class QSUBSuccess( success: Boolean, msg: String = "" ) extends QSUBStatus{
+  override def toString = "[scalaSGE]: qsub successful: %s".format(msg)
 }
 
 trait Job extends SGE {
@@ -97,16 +104,14 @@ trait Job extends SGE {
 
   def submit(): QSUBStatus = {
     //"qsub " + scriptName !! //! is a shortcut to execute system process, !! returns the string
-    try {
-      "qsub " + scriptPath !!
-    }
-    catch {
-      case failure => {
+    val result = Try("qsub " + scriptPath !!)
+    result match {
+      case Success(v) => QSUBSuccess(true, v)
+      case Failure(v) => {
         val failString: String = "qsub " + scriptPath
-        return QSUBFailure("Could not submit job: " + failString + " [Fail]: "+failure)
+        return QSUBFailure("Could not submit job: " + failString + " [Fail]: " + result.failed)
       }
     }
-    return QSUBSuccess(true)
   }
 
   def addDependency( job: Job ) = {
@@ -115,6 +120,8 @@ trait Job extends SGE {
     else
       SGEOptions += ("-hold_jid" ->  job.jobName )
   }
+
+
 
 
 }
