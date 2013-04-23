@@ -35,12 +35,8 @@ sealed trait ActorJob {
 
 case object JobsSubmitted
 case object JobsDone
-case class QueuedJob( id: String, msg: String, s: Session ) extends ActorJob
-case class RunningJob( id: String, msg: String, s: Session ) extends ActorJob
-case class FailedJob( id: String, msg: String, s: Session ) extends ActorJob
-case class EtcJob( id: String, msg: String, s: Session ) extends ActorJob
-case class FinishedJob( id: String, msg: String, s: Session ) extends ActorJob
 
+case class QueuedJob( id: String, msg: String, s: Session ) extends ActorJob
 case class JobComplete( id: String, info: JobInfo)
 
 
@@ -62,25 +58,8 @@ class Master(nrOfWorkers: Int,
     Props[JobHandler].withRouter(RoundRobinRouter(nrOfWorkers)), name = "MasterRouter"
   )
 
-  def parseProgramStatus( id: String ): ActorJob = {
-    s.getJobProgramStatus(id) match {
-      case Session.UNDETERMINED => log.info(id +" job undetermined");  EtcJob(id, "undet", s)
-      case Session.QUEUED_ACTIVE => log.info(id + " queued active");  QueuedJob(id, "queued", s)
-      case Session.SYSTEM_ON_HOLD => log.info(id + " system on hold");  EtcJob(id, "sys hold", s)
-      case Session.USER_ON_HOLD => log.info(id + " user on hold "); EtcJob(id, "usr hold", s)
-      case Session.USER_SYSTEM_ON_HOLD => log.info(id + " user system on hold ");  EtcJob(id, "usr sys on hold", s)
-      case Session.RUNNING => log.info(id + " job is running");  RunningJob(id, "running", s)
-      case Session.SYSTEM_SUSPENDED => log.info(id + " system suspended"); EtcJob(id, "sys susp", s)
-      case Session.USER_SUSPENDED => log.info(id + " user suspended "); EtcJob(id, "usr susp", s)
-      case Session.DONE => log.info(id + " done");  FinishedJob(id, "finished", s)
-      case Session.FAILED => log.info(id + " failed");  FailedJob(id, "failed", s)
-    }
-
-  }
-
   def receive = {
     case jobs: Seq[String] => {
-      //setup complete map
       for (i <- 0 until jobs.length ){
         log.info("processing a job: %d of %d".format(i+1, jobs.length))
         workerRouter ! s.wait(Session.JOB_IDS_SESSION_ANY, Session.TIMEOUT_WAIT_FOREVER)
@@ -171,30 +150,9 @@ class JobManager( jobs: Seq[String] ) {
   def exit() {
     session.exit()
   }
-  //def runnerType =
 
-  //def create
-
-  //def updateStatus
-
-  def jobStatus(id: String) ={
-    session.getJobProgramStatus(id) match {
-      case Session.UNDETERMINED => println(id +" job undetermined")
-      case Session.QUEUED_ACTIVE => println(id + " queued active")
-      case Session.SYSTEM_ON_HOLD => println(id + " system on hold")
-      case Session.USER_ON_HOLD => println(id + " user on hold ")
-      case Session.USER_SYSTEM_ON_HOLD => println(id + " user system on hold ")
-      case Session.RUNNING => println(id + " job is running")
-      case Session.SYSTEM_SUSPENDED => println(id + " system suspended")
-      case Session.USER_SUSPENDED => println(id + " user suspended ")
-      case Session.DONE => println(id + " done")
-      case Session.FAILED => println(id + " failed")
-    }
-  }
 
   def submitJob( jt: JobTemplate ): String = session.runJob(jt)
-
-  def monitor( jobs: Seq[String] ) = for ( job <- jobs ) master ! job
 
   def monitorSession( ) = {
     /*session.synchronize(Collections.singletonList(Session.JOB_IDS_SESSION_ALL),
