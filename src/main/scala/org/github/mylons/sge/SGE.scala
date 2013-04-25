@@ -58,6 +58,11 @@ trait SGE extends Resources {
     if (!SGEOptions.contains("-l h_rt="))
       addOption("-l h_rt=",  WALL_TIME)
   }
+
+  /*
+  ArrayBuffer containing each line of the script that eventually must be written
+  to a file via writeScript()
+   */
   def script( ): ArrayBuffer[String] = {
     val buff = new ArrayBuffer[String]()
     environmentOptions.foreach( buff += _ )
@@ -73,14 +78,20 @@ trait SGE extends Resources {
     return buff
   }
 
-  def writeScript( theScriptPath: String ) = {
-    scriptPath = theScriptPath + "/" + scriptFileName + ".sh"
-    val writer = new PrintWriter( scriptPath )
+  def writeScript = {
+    val writer = new PrintWriter( commandToSubmit )
     val lines = script()
     for (line <- lines)
       writer.println(line)
     writer.close()
   }
+
+  /*
+    This is what actually gets submitted to the cluster
+   */
+  def commandToSubmit = "%s/%s.sh".format(scriptPath, scriptFileName)
+
+
 
 }
 
@@ -96,7 +107,6 @@ case class QSUBSuccess( success: Boolean, msg: String = "" ) extends QSUBStatus{
 trait Job extends SGE {
   //qsub script basically
   val jobName = "DefaultJobName"
-
   val dependentJobs = new ArrayBuffer[Job]()
 
   def appendNameToScript() = SGEOptions += ("-N" -> jobName)
@@ -104,7 +114,7 @@ trait Job extends SGE {
 
   def submit(): QSUBStatus = {
     //"qsub " + scriptName !! //! is a shortcut to execute system process, !! returns the string
-    val result = Try("qsub " + scriptPath !!)
+    val result = Try("qsub " + commandToSubmit !!)
     result match {
       case Success(v) => QSUBSuccess(true, v)
       case Failure(v) => {
@@ -120,9 +130,6 @@ trait Job extends SGE {
     else
       SGEOptions += ("-hold_jid" ->  job.jobName )
   }
-
-
-
 
 }
 

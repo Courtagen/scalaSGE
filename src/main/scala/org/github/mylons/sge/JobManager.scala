@@ -20,9 +20,13 @@ package org.github.mylons.sge
 import collection.mutable.ListBuffer
 import scala.util.{Try, Success, Failure}
 import org.ggf.drmaa.{JobInfo, JobTemplate, SessionFactory, Session}
+//akka
 import akka.actor.{ActorSystem, Props, ActorRef, Actor}
+import akka.pattern.ask
+import akka.util.Timeout
 import akka.event.Logging
 import akka.routing.RoundRobinRouter
+//end akka
 import java.util.Collections
 import collection.mutable
 
@@ -38,6 +42,7 @@ case object JobsDone
 
 case class QueuedJob( id: String, msg: String, s: Session ) extends ActorJob
 case class JobComplete( id: String, info: JobInfo)
+case class JobAttemps(id: String, attempts: List[JobInfo])
 
 
 class Master(nrOfWorkers: Int,
@@ -52,11 +57,12 @@ class Master(nrOfWorkers: Int,
 
   var nrOfResults: Int = _
 
-  val completeMap = new mutable.HashMap[String, Boolean]()
+  val completeMap = new mutable.HashMap[String, JobAttemps]()
 
   val workerRouter = context.actorOf(
     Props[JobHandler].withRouter(RoundRobinRouter(nrOfWorkers)), name = "MasterRouter"
   )
+
 
   def receive = {
     case jobs: Seq[String] => {
@@ -72,14 +78,21 @@ class Master(nrOfWorkers: Int,
       actualMessages += 1
     }
     case c: JobComplete => {
-      nrOfResults += 1
       log.info(
         "master recieved complete job: %s nrOfResults=%d nrOfMessages=%d"
         .format(c.id, nrOfResults, actualMessages)
       )
+      //throw this in the map
+      val ja = completeMap.getOrElse(c.id, new JobAttemps(c.id, List()))
+      //c.info :: ja.attemps makes new list
+      completeMap.put(c.id, new JobAttemps(c.id, c.info :: ja.attempts))
+
+      //exit condition
+      nrOfResults += 1
       if (actualMessages == nrOfResults) {
         //send something to listener
         log.info("actors shutting down..")
+        sender ! completeMap.toMap
         listener ! JobsDone
         context.stop(self)
       }
@@ -87,6 +100,7 @@ class Master(nrOfWorkers: Int,
     case j: ActorJob => log.info("job id:%s msg:%s".format(j.id, j.msg)); workerRouter ! j
     case wtf => log.warning("wtf -- outer: " + wtf)
   }
+
 
 }
 
@@ -136,7 +150,7 @@ class Listener extends Actor {
   }
 }
 
-class JobManager( jobs: Seq[String] ) {
+class JobManager( jobs: Seq[Job] ) {
 
   val session: Session = SessionFactory.getFactory.getSession
   session.init(null)
@@ -154,27 +168,49 @@ class JobManager( jobs: Seq[String] ) {
 
   def submitJob( jt: JobTemplate ): String = session.runJob(jt)
 
-  def monitorSession( ) = {
+  def prepareJobs = {
+    //write job scripts
+    for (job <- jobs) job.writeScript
+    //setup job templates
+  }
+
+  def monitorSession = {
     /*session.synchronize(Collections.singletonList(Session.JOB_IDS_SESSION_ALL),
       Session.TIMEOUT_NO_WAIT, false)*/
     val ids = new ListBuffer[String]()
     for (job <- jobs) {
       val jt = session.createJobTemplate()
       jt.setNativeSpecification("-b no") //allows shell script to be submittable
-      jt.setRemoteCommand(job)
-      jt.setJobName(job.split('/').last.split('.').head)
+      jt.setRemoteCommand(job.commandToSubmit)
+      //jt.setJobName(job.split('/').last.split('.').head)
       ids += submitJob(jt)
     }
-    master ! ids
+    //master ! ids
+    //master ? ids
+    master ? ids
 
   }
 
 
 }
 
+class SleepJob(nameOfJob: String = "Sleep") extends Job {
+  override val jobName = nameOfJob
+  this.appendNameToScript()
+  override val NUMBER_OF_CPUS = 1
+  override val H_MEMORY = "256M"
+  override val S_MEMORY = "128M"
+  override val scriptFileName = jobName
+  this.appendCommandToScript("sleep 25")
+
+}
+
 object TestApp extends App {
   //setup manager
-  val jobList = List("/home/sgeadmin/test-1.sh","/home/sgeadmin/test-2.sh","/home/sgeadmin/test-3.sh","/home/sgeadmin/test-4.sh","/home/sgeadmin/test-5.sh")
+
+
+  val jobList = List(new SleepJob("test-1"), new SleepJob("test-1"), new SleepJob("test-3"), new SleepJob("test-4"))
+
   val m = new JobManager(jobList)
 
   val jobMap = new mutable.HashMap[String, JobTemplate]()
@@ -190,9 +226,16 @@ object TestApp extends App {
   }*/
 
 
-  m.monitorSession
+  m.prepareJobs
+  println("[TestApp] about to monitor session")
+  val result = m.monitorSession
+  println("[TestApp] done monitoring session")
+
   while (!m.master.isTerminated) Thread.sleep(2000)
   println("exiting..")
   m.exit()
+
+
+
 
 }
