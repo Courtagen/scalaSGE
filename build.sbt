@@ -18,7 +18,19 @@ mainClass in assembly := Some("org.github.mylons.sge.TestApp")
 
 jarName in assembly := "drmaaTest.jar"
 
-resolvers += "Typesafe Releases" at "http://repo.typesafe.com/typesafe/releases"
+resolvers += "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/"
 
-libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.1.2"
+resolvers += "Twitter repo" at "http://maven.twttr.com"
+
+resolvers ++= Seq("snapshots" at "http://oss.sonatype.org/content/repositories/snapshots",
+                    "releases"  at "http://oss.sonatype.org/content/repositories/releases")
+
+resolvers += Opts.resolver.sonatypeSnapshots
+
+libraryDependencies ++= Seq(
+    "com.typesafe.akka" %% "akka-actor" % "2.1.2",
+    "com.typesafe" %% "scalalogging-log4j" % "1.1.0-SNAPSHOT",
+    "org.apache.logging.log4j" % "log4j-api" % "2.0-beta4",
+    "org.apache.logging.log4j" % "log4j-core" % "2.0-beta4"
+)
 
