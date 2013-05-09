@@ -133,7 +133,8 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
           val info = session.wait(Session.JOB_IDS_SESSION_ANY, Session.TIMEOUT_WAIT_FOREVER)
           //infos += info
           infoHandler(info)
-          if (info.hasExited) markJobComplete(info) //job should be complete
+          //exit status == 1 happens if SGE kills a job due to memory being exceeded.
+          if (info.hasExited && info.getExitStatus != 1) markJobComplete(info) //job should be complete
         }
       }
     }
@@ -152,7 +153,8 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
       val info = session.wait(Session.JOB_IDS_SESSION_ANY, Session.TIMEOUT_WAIT_FOREVER)
       infos += info
       infoHandler(info)
-      if (info.hasExited) markJobComplete(info)
+      //exit status == 1 happens if SGE kills a job due to memory being exceeded.
+      if (info.hasExited && info.getExitStatus != 1) markJobComplete(info)
     }
 
     //keep re-running jobs until they're done, or we've exceeded our execution threshold
@@ -227,10 +229,14 @@ object TestApp extends Logging with App {
   val infoSeq = m.monitorSession //blocking
   logger.debug("done monitoring session")
 
-  //val failedJobs = m.getFailedJobs(infoSeq)
-  //val goodJobs = m.getSuccessfulJobs(infoSeq)
-
   logger.debug("infoSeq=%s exiting..".format(infoSeq))
+
+  for ( job <- m.failedJobs ){
+    logger.info("job %s:%s was submitted %d times and apparently failed".format(job.template.getJobName, job.id, job.numberOfSubmissions))
+  }
+
+
+
   m.exit()
 
 }
