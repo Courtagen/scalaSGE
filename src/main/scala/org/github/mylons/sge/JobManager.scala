@@ -28,7 +28,7 @@ class SleepJob(nameOfJob: String = "Sleep") extends Job {
 
 }
 
-case class LifeOfJob(id: String, template: JobTemplate, numberOfSubmissions: Int, complete: Boolean)
+case class LifeOfJob(id: String, template: JobTemplate, numberOfSubmissions: Int, complete: Boolean, job: Job)
 
 class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Logging {
 
@@ -81,12 +81,6 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
     loj.copy(numberOfSubmissions = loj.numberOfSubmissions + 1)
   }
 
-  private def dumpMap( m: mutable.HashMap[String, LifeOfJob]) = {
-    for (key <- m.keys) {
-      logger.debug("[dm] key: %s id: %s LOJ:%s".format(key, m(key).id, m(key)))
-    }
-  }
-
   def monitorSession: Boolean = {
     /*session.synchronize(Collections.singletonList(Session.JOB_IDS_SESSION_ALL),
       Session.TIMEOUT_NO_WAIT, false)*/
@@ -117,7 +111,6 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
         //get the failed jobs
         val jobs = failedJobs
         logger.debug("top of failedJobHelper loop. jobTemplateMap size: %d failedJobs size: %d".format(jobTemplateMap.size, jobs.size))
-        dumpMap(jobTemplateMap)
         //setup ids collection
         val ids = new ListBuffer[String]()
         //resubmit jobs -- updates job map
@@ -140,7 +133,7 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
       val jt = createJobTemplate(job)
       ids += submitJob(jt)
       //put into map of id -> jt?
-      jobTemplateMap.put(ids.last, new LifeOfJob(ids.last, jt, 0, false))
+      jobTemplateMap.put(ids.last, new LifeOfJob(ids.last, jt, 0, false, job))
     }
 
     val infos = new ListBuffer[JobInfo]()
