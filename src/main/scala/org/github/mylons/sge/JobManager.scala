@@ -7,14 +7,6 @@ package org.github.mylons.sge
  * Description: 
  */
 
-/**
- * actor and future notes
- *
- * Future.isSet() -- returns whether or not the output data is ready
- * val future = actor !! message
- *
- * idea: give futures to other actor(s) for processing
- */
 
 
 import collection.mutable.ListBuffer
@@ -76,20 +68,23 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
     if(jobTemplateMap.contains(oldId)){
       logger.debug("swapping id: oldId=%s newId=%s".format(oldId, newId))
       val loj = jobTemplateMap(oldId)
-      //add new id, preserving references to job template, and # of submissions
-      //println("about to add new item to template map cur size=%d oldId=%s newId=%s".format(jobTemplateMap.size, oldId, newId))
-      jobTemplateMap.update(newId, new LifeOfJob(newId, loj.template, loj.numberOfSubmissions, loj.complete))
-      //println("added new item to template map cur size=%d oldId=%s newId=%s".format(jobTemplateMap.size, oldId, newId))
-      //remove old version
       jobTemplateMap.remove(oldId)
-      //println("removed old id from template map cur size=%d oldId=%s newId=%s".format(jobTemplateMap.size, oldId, newId))
+      //add new id, preserving references to job template, and # of submissions
+      jobTemplateMap.update(newId, loj.copy(id = newId))
+      //remove old version
     } else {
       logger.debug("can't swap oldId: %s for newId: %s".format(oldId, newId))
     }
   }
 
   private def incrementJobSubmission( loj: LifeOfJob ): LifeOfJob = {
-    new LifeOfJob(loj.id, loj.template, loj.numberOfSubmissions + 1, loj.complete)
+    loj.copy(numberOfSubmissions = loj.numberOfSubmissions + 1)
+  }
+
+  private def dumpMap( m: mutable.HashMap[String, LifeOfJob]) = {
+    for (key <- m.keys) {
+      logger.debug("[dm] key: %s id: %s LOJ:%s".format(key, m(key).id, m(key)))
+    }
   }
 
   def monitorSession: Boolean = {
@@ -100,8 +95,8 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
       if (jobTemplateMap.contains(info.getJobId)) {
         logger.debug("marking job: %s complete".format(info.getJobId))
         val loj = jobTemplateMap(info.getJobId)
-        val newLoj = new LifeOfJob(info.getJobId, loj.template, loj.numberOfSubmissions, true)
-        jobTemplateMap.update(info.getJobId, newLoj)
+        val newLoj = loj.copy(complete = true)
+        jobTemplateMap.update(newLoj.id, newLoj)
       } else {
         logger.debug("can't mark job complete for some reason: id=%s".format(info.getJobId))
       }
@@ -122,6 +117,7 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
         //get the failed jobs
         val jobs = failedJobs
         logger.debug("top of failedJobHelper loop. jobTemplateMap size: %d failedJobs size: %d".format(jobTemplateMap.size, jobs.size))
+        dumpMap(jobTemplateMap)
         //setup ids collection
         val ids = new ListBuffer[String]()
         //resubmit jobs -- updates job map
@@ -145,7 +141,6 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
       ids += submitJob(jt)
       //put into map of id -> jt?
       jobTemplateMap.put(ids.last, new LifeOfJob(ids.last, jt, 0, false))
-      //updateJobMap(ids.last, jt)
     }
 
     val infos = new ListBuffer[JobInfo]()
@@ -181,7 +176,7 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
       val loj = jobTemplateMap(id)
       val newId = submitJob(loj.template)
       //update number of submissions
-      val newLoj = incrementJobSubmission(loj)
+      val newLoj = incrementJobSubmission(loj).copy(id = newId)
       //swap ids
       swapJobIdInMap(id, newId)
       jobTemplateMap.update(newId, newLoj)
@@ -192,12 +187,6 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
       id
     }
   }
-
-  /*def getSuccessfulJobs( infos: Seq[JobInfo]): Seq[JobInfo] = infos.filter( info => info.getExitStatus == 0 )
-
-  def getFailedJobs( infos: Seq[JobInfo]): Seq[JobInfo] = {
-    infos.filter( info => info.getExitStatus != 0 )
-  }*/
 
   def successfulJobs =
     jobTemplateMap.values.filter( lifeOfJob => lifeOfJob.complete == true )
@@ -210,11 +199,6 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
 
 
 object TestApp extends Logging with App {
-  //setup manager
-  //set timeout condition -- infinity could be silly, but here we go
-
-
-
 
   val jobList = List(new SleepJob("test-1"), new SleepJob("test-2"), new SleepJob("test-3"), new SleepJob("test-4"))
 
@@ -240,20 +224,3 @@ object TestApp extends Logging with App {
   m.exit()
 
 }
-/*
-*  filter Futures of jobs for failure
-*  ex:
-val future1 = Future.successful(4)
-val future2 = future1.filter(_ % 2 == 0)
-
-future2 foreach println
-
-val failedFilter = future1.filter(_ % 2 == 1).recover {
-  // When filter fails, it will have a java.util.NoSuchElementException
-  case m: NoSuchElementException ⇒ 0
-}
-
-failedFilter foreach println
-
-
-*/
