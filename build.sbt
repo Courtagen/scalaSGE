@@ -28,7 +28,7 @@ resolvers ++= Seq("snapshots" at "http://oss.sonatype.org/content/repositories/s
 resolvers += Opts.resolver.sonatypeSnapshots
 
 libraryDependencies ++= Seq(
-    "com.typesafe" %% "scalalogging-log4j" % "1.1.0-SNAPSHOT",
+    "com.typesafe" %% "scalalogging-log4j" % "0.5.0-SNAPSHOT",
     "org.apache.logging.log4j" % "log4j-api" % "2.0-beta4",
     "org.apache.logging.log4j" % "log4j-core" % "2.0-beta4"
 )
