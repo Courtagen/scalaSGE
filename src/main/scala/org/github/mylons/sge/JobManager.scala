@@ -143,7 +143,8 @@ class JobManager( jobs: Seq[Job], val resubmitAttempts: Int = 3 ) extends Loggin
       infos += info
       infoHandler(info)
       //exit status == 1 happens if SGE kills a job due to memory being exceeded.
-      if (info.hasExited && info.getExitStatus != 1) markJobComplete(info)
+      //Set job to complete only if exit status is 0
+      if (info.hasExited && info.getExitStatus == 0) markJobComplete(info)
     }
 
     //keep re-running jobs until they're done, or we've exceeded our execution threshold
